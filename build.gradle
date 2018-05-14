@@ -1,0 +1,59 @@
+repositories {
+    mavenCentral()
+
+    maven {
+        credentials {
+            username "${artifactory_user}"
+            password "${artifactory_password}"
+        }
+        url "${artifactory_contextUrl}/sp_quantum_snapshots"
+    }
+}
+buildscript {
+    repositories {
+        jcenter()
+    }
+    dependencies {
+        // do not change this version to 4. the publish task breaks
+        classpath "org.jfrog.buildinfo:build-info-extractor-gradle:3.+"
+    }
+}
+def getAllJavaProjects() {
+
+    ext.projects = [
+            project("sdk"),
+            project("services")
+    ]
+    return ext.projects
+
+}
+
+apply from: 'scripts/multiprojectbase.gradle'
+
+task dist(type: GradleBuild) {
+    tasks[":server:compileJava"]
+}
+
+task jacocoAggregateReport(type: JacocoReport) {
+    jacocoClasspath = configurations.jacoco
+    subprojects.each {
+
+        if (it.hasProperty("sourceSets")) {
+            sourceSets(it.sourceSets.main)
+        }
+    }
+    executionData files(["sdks/core/build/jacoco/test.exec", "sdks/http/build/jacoco/test.exec",
+                         "sdks/cache/build/jacoco/test.exec", "sdks/databus/build/jacoco/test.exec",
+                         "server/build/jacoco/test.exec",
+                         "sample/build/jacoco/intTest.exec"])
+    classDirectories = files(["sdks/core/build/classes/main", "server/build/classes/main",
+                              "sdks/http/build/classes/main", "sdks/metrics/build/classes/main"])
+    reports {
+        html {
+            enabled true
+            destination "build/reports/jacoco/aggregate/html"
+        }
+    }
+
+
+}

@@ -1,0 +1,20 @@
+repositories {
+    mavenCentral()
+    maven {
+        credentials {
+            username = "${artifactory_user}"
+            password = "${artifactory_password}"
+        }
+        url "https://sptest.artifactoryonline.com/sptest/sp_quantum_snapshots"
+    }
+}
+
+dependencies {
+    compile group: 'com.stockpile.quantum', name: 'databus-sdk', version: '1.0.0-SNAPSHOT'
+
+}
+
+
+
+
+
