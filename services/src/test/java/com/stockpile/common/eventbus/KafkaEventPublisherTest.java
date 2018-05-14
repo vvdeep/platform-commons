@@ -1,3 +1,6 @@
+/**
+ * Copyright 2018 by StockPile Inc. All rights reserved
+ */
 package com.stockpile.common.eventbus;
 
 
