@@ -1,2 +1,4 @@
 rootProject.name = 'platform-commons'
-include 'sdk','services'
+include "common-sdk","common-services"
+project (':common-sdk').projectDir = new File('./sdk') as File
+project (':common-services').projectDir = new File('./services') as File

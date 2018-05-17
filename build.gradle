@@ -21,8 +21,8 @@ buildscript {
 def getAllJavaProjects() {
 
     ext.projects = [
-            project("sdk"),
-            project("services")
+            project("common-sdk"),
+            project("common-services")
     ]
     return ext.projects
 

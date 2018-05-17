@@ -15,7 +15,7 @@ repositories {
 }
 
 dependencies {
-    compile project(":sdk")
+    compile project(":common-sdk")
     //'1.1.0'
     testCompile group: 'org.testng', name: 'testng', version: '6.14.3'
     testCompile group: 'commons-lang', name: 'commons-lang', version: '2.6'
