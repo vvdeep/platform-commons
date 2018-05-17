@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration monitorInterval="30" packages="com.sp.quantum.core.logging">
+    <Appenders>
+        <Routing name="Error">
+            <Routes pattern="$${env:K8S}">
+                <Route key="True">
+                    <Console name="STDOUT" target="SYSTEM_OUT">
+                        <Filters>
+                            <ThresholdFilter level="ERROR" onMatch="ACCEPT" onMismatch="DENY"/>
+                            <BurstFilter level="ERROR" rate="10" maxBurst="30"/>
+                        </Filters>
+                        <JSONLayout complete="false" compact="true" eventEol="true">
+                            <KeyValuePair key="tenantId" value="$${quantumcontext:tenantId}"/>
+                            <KeyValuePair key="requestId" value="$${quantumcontext:requestId}}"/>
+                        </JSONLayout>
+                    </Console>
+                </Route>
+                <Route key="$${env:K8S}">
+                    <RollingFile name="Error" append="true" fileName="${sys:log.dir}/error.log"
+                                 filePattern="${sys:log.dir}/error-%i.log">
+                        <Filters>
+                            <ThresholdFilter level="ERROR" onMatch="ACCEPT" onMismatch="DENY"/>
+                            <BurstFilter level="ERROR" rate="10" maxBurst="30"/>
+                        </Filters>
+                        <PatternLayout>
+                            <pattern>%d{ISO8601} [%t] $${quantumcontext:tenantId} %p %c - %m%n</pattern>
+                        </PatternLayout>
+                        <Policies>
+                            <SizeBasedTriggeringPolicy size="50 MB"></SizeBasedTriggeringPolicy>
+                        </Policies>
+                        <DefaultRolloverStrategy fileIndex="min" max="10"/>
+                    </RollingFile>
+                </Route>
+            </Routes>
+        </Routing>
+        <Routing name="Server">
+            <Routes pattern="$${env:K8S}">
+                <Route key="True">
+                    <Console name="STDOUT" target="SYSTEM_OUT">
+                        <JSONLayout complete="false" compact="true" eventEol="true">
+                            <KeyValuePair key="tenantId" value="$${quantumcontext:tenantId}"/>
+                            <KeyValuePair key="requestId" value="$${quantumcontext:requestId}}"/>
+                        </JSONLayout>
+
+                    </Console>
+                </Route>
+                <Route key="$${env:K8S}">
+                    <RollingFile name="Server" append="true" fileName="${sys:log.dir}/server.log"
+                                 filePattern="${sys:log.dir}/server-%i.log">
+                        <PatternLayout>
+                            <pattern>%d{ISO8601} [%t] $${quantumcontext:tenantId} %p %c %throwable{short.lineNumber} -
+                                %m%n
+                            </pattern>
+                        </PatternLayout>
+                        <Policies>
+                            <SizeBasedTriggeringPolicy size="50 MB"></SizeBasedTriggeringPolicy>
+                        </Policies>
+                        <DefaultRolloverStrategy fileIndex="min" max="10"/>
+                    </RollingFile>
+                </Route>
+            </Routes>
+        </Routing>
+    </Appenders>
+    <Loggers>
+        <!-- Server Loggers -->
+        <Logger name="org.apache" level="error">
+            <Appender-ref ref="Server"/>
+        </Logger>
+        <Logger name="com.sp" level="info">
+            <Appender-ref ref="Server"/>
+        </Logger>
+        <Logger name="all" level="info">
+            <Appender-ref ref="Server"/>
+        </Logger>
+        <Root level="error">
+            <Appender-ref ref="Error"/>
+        </Root>
+    </Loggers>
+</Configuration>

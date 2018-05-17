@@ -1,0 +1,266 @@
+ext {
+    dist_root = System.getProperty("user.home") + '/quantum'
+    root_bin = dist_root + '/bin'
+    dist_sw = dist_root + '/sw'
+
+
+
+    failOnError = false
+
+    jettyVersion = "9.4.9.v20180320"
+    dist_sw = dist_root + '/sw'
+
+    jacoco_filter = {}
+
+}
+
+repositories {
+    mavenCentral()
+
+}
+
+configurations {
+    jacoco
+}
+
+dependencies {
+    jacoco 'org.jacoco:org.jacoco.ant:0.8.0'
+}
+
+configure(getAllJavaProjects()) {
+    repositories {
+        mavenCentral()
+    }
+    group = 'com.stockpile.platform'
+    ext.javaCompilerExecutable = System.env['JAVA_HOME'] ? System.env['JAVA_HOME'] + '/bin/javac' : 'javac'
+
+    // modules dist
+    ext.module_logs = dist_root + '/var/log/' + project.name
+    ext.module_dist_root = dist_root + '/sw/apps/' + project.name + '/'
+    apply plugin: 'idea'
+    apply plugin: 'maven'
+    apply plugin: 'findbugs'
+    apply plugin: 'java'
+    apply plugin: 'jacoco'
+    apply plugin: 'maven-publish'
+    apply plugin: "com.jfrog.artifactory"
+
+
+    artifactory {
+        contextUrl = "${artifactory_contextUrl}"
+        publish {
+            repository {
+                if (project.version.endsWith('-SNAPSHOT')) {
+                    repoKey = 'sp_platform_snapshots'
+                } else {
+                    repoKey = 'sp_platform_release'
+                }
+                username = "${artifactory_user}"
+                password = "${artifactory_password}"
+
+            }
+            defaults {
+                publications('mavenJava')
+            }
+        }
+    }
+
+    publishing {
+        publications {
+            mavenJava(MavenPublication) {
+                from components.java
+            }
+        }
+    }
+    jacoco {
+        toolVersion = "0.8.0"
+
+    }
+    sourceCompatibility = 1.8
+    targetCompatibility = 1.8
+
+    configurations {
+        providedCompile
+        compile.exclude group: 'ch.qos.logback'
+        jacocoant
+    }
+
+
+    sourceSets {
+        main.compileClasspath += configurations.providedCompile
+        test.compileClasspath += configurations.providedCompile
+        test.runtimeClasspath += configurations.providedCompile
+        test.runtimeClasspath += files("resources")
+
+    }
+
+    // forking javac and passing the arg , else gradle does not honour it
+    tasks.withType(JavaCompile) {
+        options.compilerArgs << '-XDignore.symbol.file'
+        options.debug = true
+        options.fork = true
+        options.forkOptions.executable = javaCompilerExecutable
+        options.warnings = false
+    }
+
+
+
+    dependencies {
+        testCompile group: 'org.json', name: 'json', version: '20140107'
+        testCompile group: 'org.testng', name: 'testng', version: '6.8.5'
+
+    }
+    test {
+        outputs.files fileTree(buildDir).include('*.log')
+        useTestNG()
+        exclude '**/**ITCase.java'
+        exclude '**/integration/**'
+        testLogging {
+            exceptionFormat "full"
+        }
+        ignoreFailures = false
+        minHeapSize = "1024m"
+        maxHeapSize = "1024m"
+        reports.html.destination = "$buildDir/reports/tests"
+        systemProperty 'server.name', 'container'
+        scanForTestClasses = false
+        options.suiteXmlFiles = [file('src/test/resources/testsuite.xml')]
+        systemProperty 'module.dir', projectDir.absolutePath
+        systemProperty 'log.dir', buildDir.absolutePath
+        systemProperty 'EMBEDDED_MODE', "true"
+        systemProperty "production.mode", "false"
+        jvmArgs '-Djava.library.path=/usr/local/lib', '-Djava.awt.headless=true'
+        if (System.getProperty('DEBUG', 'false') == 'true') {
+            jvmArgs '-Djava.library.path=/usr/local/lib', '-Xdebug',
+                    '-Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=9009'
+        }
+
+    }
+
+
+    findbugs {
+        ignoreFailures = true
+        toolVersion = "3.0.1"
+        reportsDir = file("$buildDir/reports/findbugs")
+        effort = "default"
+        showProgress = false
+    }
+
+
+    task intTest(type: Test, dependsOn: ['startServices']) {
+        useTestNG()
+        include '**/**ITCase.java'
+        include '**/integration/**'
+        testLogging {
+            exceptionFormat "full"
+        }
+        ignoreFailures = false
+        options.suiteXmlFiles = [file('src/test/resources/testsuite.xml')]
+
+        outputs.files fileTree(buildDir).include('*.log')
+        outputs.files fileTree(module_logs).include('*.log')
+        reports.html.destination = "$buildDir/reports/intTests"
+        systemProperty 'module.dir', projectDir.absolutePath
+        systemProperty 'QUANTUM_HOME', buildDir.absolutePath
+        // not this is setting the properties for the client and not the jvm. that needs to be set in agent
+        systemProperty 'test.mode', "true"
+        systemProperty 'log.dir', buildDir.absolutePath
+        systemProperty 'dev.env', System.getProperty('dev.env')
+
+        jvmArgs '-Djava.library.path=/usr/local/lib'
+        if (System.getProperty('DEBUG', 'false') == 'true') {
+            jvmArgs '-Djava.library.path=/usr/local/lib', '-Xdebug',
+                    '-Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=9009'
+        }
+
+
+
+        afterSuite { suite, result ->
+            println('-' * 80)
+            println(
+                    "Finished " + project.name + " test suite with result: " + result.getResultType()
+            )
+            println(
+                    result.getSuccessfulTestCount() + " tests succeeded, " +
+                            result.getFailedTestCount() + " tests failed, " +
+                            "and " + result.getSkippedTestCount() + " tests were skipped."
+            )
+            println('-' * 80)
+        }
+        jacoco {
+            append true
+        }
+
+        jar.excludes = ["*.service", "log4j2.xml"]
+
+
+    }
+
+
+    task dist(type: Copy, dependsOn: ['build']) {
+        destinationDir = file(module_dist_root)
+        destinationDir.mkdirs()
+        // Dependencies
+        from(configurations.runtime) {
+            into 'lib'
+            include '*.jar'
+        }
+
+
+        from("build/libs") {
+            into 'lib'
+            include '*.jar'
+            exclude '*tests.jar'
+        }
+
+        doLast {
+            ant.chmod(dir: "$module_dist_root", perm: "777")
+
+        }
+        from("resources") {
+            into("resources")
+        }
+        from("src/main/resources") {
+            into('resources')
+            exclude "*.service"
+        }
+        from("src/main/resources") {
+            into('../../../etc')
+            include '*.service'
+        }
+
+
+    }
+    task stopServices(type: Exec, overwrite: true) {
+        def cmd = ""
+        cmd = "qctl stop " + project.name
+        commandLine = cmd.tokenize()
+    }
+
+    task unpackJacoco(type: Copy) {
+        from zipTree(configurations.jacocoAgent.singleFile)
+        include "jacocoagent.jar"
+        into "build/jacoco"
+    }
+
+
+    task startServices(type: Exec, dependsOn: ['dist', 'unpackJacoco'], overwrite: true) {
+        def cmd = ""
+        cmd = "qctl start " + project.name + " -- -javaagent:" +
+                file("build/jacoco/jacocoagent.jar").absolutePath +
+                "=destfile=" + file("build/jacoco/intTest.exec").absolutePath + ",append=" +
+                "true,dumponexit=true,output=file,jmx=false -Dtest.mode=true"
+        commandLine = cmd.tokenize()
+    }
+
+    intTest.finalizedBy "stopServices"
+}
+
+
+
+tasks.withType(FindBugs) {
+    reports {
+        xml.enabled = false
+        html.enabled = true
+    }
+}
